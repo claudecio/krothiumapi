@@ -1,0 +1,45 @@
+<?php
+// Importa autoload do Composer
+require_once realpath(path: __DIR__ . '/../vendor/autoload.php');
+
+use Dotenv\Dotenv;
+use KrothiumAPI\KrothiumAPI;
+
+// Carrega variáveis de ambiente
+$dotenv = Dotenv::createImmutable(paths: realpath(path: __DIR__ . '/../'));
+$dotenv->load();
+
+// ======================================
+// Inicializa KrothiumAPI com configs
+// ======================================
+KrothiumAPI::init(config: [
+    'errors' => [
+        'error_log' => realpath(path: __DIR__ . '/../storage/Logs/php-error.log'),
+    ],
+    'constants' => [
+        'APP_SYS_MODE' => 'DEV', // DEV | PROD
+        'ROOT_SYSTEM_PATH' => realpath(path: __DIR__ . "/.."),
+        'INI_SYSTEM_PATH' => realpath(path: __DIR__ . "/../src"),
+        'MODULE_PATH' => realpath(path: __DIR__ . "/../src/Module"),
+        'STORAGE_FOLDER_PATH' => realpath(path: __DIR__ . "/../storage"),
+        'COMPONENT_PATH' => realpath(path: __DIR__ . "/../src/Common/Component"),
+        'ROUTER_ALLOWED_ORIGINS' => [
+            '*'
+        ]
+    ],
+    'system' => [
+        'enable_session' => true,
+        'default_timezone' => 'America/Fortaleza',
+    ],
+    'logger' => [
+        'driver' => 'FILE',
+        'logDir' => realpath(path: __DIR__ . '/../storage/Logs')
+    ]
+]);
+
+// Importa rotas da API v0
+
+// ============================
+// Dispara o roteador
+// ============================
+KrothiumAPI::routerDispatch();

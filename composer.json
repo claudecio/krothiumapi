@@ -1,0 +1,23 @@
+{
+    "name": "claudecio/krothiumapi",
+    "description": "Framework PHP para desenvolvimento rápido de aplicações web.",
+    "type": "library",
+    "license": "MIT",
+    "autoload": {
+      "psr-4": {
+        "KrothiumAPI\\": "src/"
+      }
+    },
+    "require": {
+        "php": ">=8.2",
+        "predis/predis": "v3.4.0",
+        "vlucas/phpdotenv": "v5.6.2"
+    },
+    "authors": [
+        {
+            "name": "Claudecio Martins",
+            "email": "contato@claudecio.is-a.dev",
+            "role": "Developer"
+        }
+    ]
+}
