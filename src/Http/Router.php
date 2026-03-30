@@ -367,14 +367,17 @@ class Router {
                     if ($shouldBlock) {
                         $code = (int)($result['response_code'] ?? 403);
                         $msg  = (string)($result['message'] ?? 'Blocked by middleware');
+                        $json_response = [
+                            "status" => $result['status'] ?? 'error',
+                            "message" => $msg
+                        ];
+                        if(isset($result['output']) && (!empty($result['output']) || $result['output'] !== null || $result['output'] !== '')) {
+                            $json_response['output'] = $result['output'];
+                        }
 
                         http_response_code(response_code: $code);
                         header(header: 'Content-Type: application/json; charset=utf-8');
-                        echo json_encode(value: [
-                            "status" => $result['status'] ?? 'error',
-                            "message" => $msg,
-                            "output" => $result['output'] ?? null
-                        ]);
+                        echo json_encode(value: $json_response);
                         exit;
                     }
                 }
