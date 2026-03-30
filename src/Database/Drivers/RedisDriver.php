@@ -76,9 +76,10 @@ class RedisDriver {
 
     /** Proxy para comandos não-explicitados */
     public function __call(string $name, array $arguments) {
-        if (method_exists(object_or_class: $this->connection, method: $name)) {
+        try {
             return $this->connection->{$name}(...$arguments);
+        } catch (\Throwable $e) {
+            throw new RuntimeException("Redis command '{$name}' failed: {$e->getMessage()}");
         }
-        throw new RuntimeException(message: "Redis command or method '{$name}' not supported");
     }
 }
