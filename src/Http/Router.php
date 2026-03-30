@@ -363,13 +363,12 @@ class Router {
                     $status = $result['status'] ?? null;
 
                     $shouldBlock = ($block === true) || ($status !== null && $status !== 'success');
-
                     if ($shouldBlock) {
-                        $code = (int)($result['response_code'] ?? 403);
-                        $msg  = (string)($result['message'] ?? 'Blocked by middleware');
+                        $code = (int) ($result['response_code'] ?? 403);
+                        $msg  = (string) ($result['message'] ?? 'Blocked by middleware');
                         $json_response = [
                             "status" => $result['status'] ?? 'error',
-                            "message" => $msg
+                            "message" => $msg ?? "{$class}::{$method} blocked the request."
                         ];
                         if(isset($result['output']) && (!empty($result['output']) || $result['output'] !== null || $result['output'] !== '')) {
                             $json_response['output'] = $result['output'];
