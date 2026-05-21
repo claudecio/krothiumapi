@@ -45,24 +45,19 @@ class RequestHelper {
 
         // GET/POST/COOKIE/SERVER
         if(isset($inputMap[$method])) {
-
             // POST JSON: lê o body
             if($method === 'POST' && $isJson) {
                 $raw = file_get_contents(filename: 'php://input') ?: '';
-
                 if($return_type === 'string') {
                     return $raw;
                 }
-
                 $data = json_decode(json: $raw, associative: true);
                 if(json_last_error() !== JSON_ERROR_NONE) {
                     self::errorJson(statusCode: 400, message: 'Invalid JSON: ' . json_last_error_msg());
                 }
-
                 unset($data['_method']);
                 return self::applyFilters(data: $data ?? [], filters: $filters);
             }
-
             $form = filter_input_array(type: $inputMap[$method], options: $filters ?? FILTER_DEFAULT) ?? [];
             return is_array(value: $form) ? $form : [];
         }
@@ -73,12 +68,10 @@ class RequestHelper {
             if($raw === '') {
                 return [];
             }
-
             if($isJson) {
                 if($return_type === 'string') {
                     return $raw;
                 }
-
                 $data = json_decode(json: $raw, associative: true);
                 if(json_last_error() !== JSON_ERROR_NONE) {
                     self::errorJson(statusCode: 400, message: 'Invalid JSON: ' . json_last_error_msg());
@@ -86,11 +79,9 @@ class RequestHelper {
             } else {
                 parse_str($raw, $data);
             }
-
             unset($data['_method']);
             return self::applyFilters(data: $data ?? [], filters: $filters);
         }
-
         // Default: GET
         $form = filter_input_array(type: INPUT_GET, options: $filters ?? FILTER_DEFAULT) ?? [];
         return is_array(value: $form) ? $form : [];
@@ -192,7 +183,6 @@ class RequestHelper {
         if($filters === null) {
             return $data;
         }
-
         $filtered = filter_var_array(array: $data, options: $filters, add_empty: false);
         return is_array(value: $filtered) ? $filtered : [];
     }
