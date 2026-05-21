@@ -62,7 +62,7 @@ class Router {
      * @param string $msg A mensagem de erro detalhada a ser incluída no corpo da resposta JSON.
      * @return void Este método não retorna um valor, pois ele finaliza a execução do script.
      */
-    private static function jsonError(int $code, string $msg): void {
+    private static function error(int $code, string $msg): void {
         http_response_code(response_code: $code);
         header(header: 'Content-Type: application/json; charset=utf-8');
         echo json_encode(value: [
@@ -84,7 +84,7 @@ class Router {
      * 1.  **Iteração:** Percorre o array estático que lista os nomes das constantes obrigatórias.
      * 2.  **Verificação:** Para cada nome de constante, ele usa `defined()` para verificar se a constante existe no escopo global do PHP.
      * 3.  **Ação em Caso de Falha:** Se uma constante obrigatória **não estiver definida**, o método assume uma falha crítica de configuração. 
-     *      Ele chama o método `self::jsonError()`, que envia uma resposta JSON com o código HTTP **500 Internal Server Error** e uma mensagem 
+     *      Ele chama o método `self::error()`, que envia uma resposta JSON com o código HTTP **500 Internal Server Error** e uma mensagem 
      *      detalhando qual constante está faltando, encerrando a execução do script.
      *
      * @return void Este método não retorna um valor em caso de sucesso; ele apenas garante que as constantes existam. Em caso de falha, ele envia uma resposta HTTP de erro e encerra o script.
@@ -92,7 +92,7 @@ class Router {
     private static function checkRequiredConstants(): void {
         foreach (self::$requiredConstants as $constant) {
             if (!defined(constant_name: $constant)) {
-                self::jsonError(
+                self::error(
                     code: 500,
                     msg: "Constant '{$constant}' not defined."
                 );
@@ -208,7 +208,7 @@ class Router {
      * 1.  **Verificação de Método:** Verifica se o método HTTP (`$method`) é um dos suportados ('PUT', 'DELETE', 'PATCH'). Se não for, retorna um array vazio.
      * 2.  **Leitura do Input:** Lê o conteúdo bruto do corpo da requisição (`php://input`). Se estiver vazio, retorna um array vazio.
      * 3.  **Processamento Condicional:**
-     * * **JSON (`application/json`):** Se o `Content-Type` for JSON, o conteúdo é decodificado. Se a decodificação falhar, o método chama `self::jsonError()` para enviar uma resposta de erro HTTP 500 e encerrar a execução.
+     * * **JSON (`application/json`):** Se o `Content-Type` for JSON, o conteúdo é decodificado. Se a decodificação falhar, o método chama `self::error()` para enviar uma resposta de erro HTTP 500 e encerrar a execução.
      * * **Form Data (Outros):** Caso contrário, o conteúdo é tratado como uma string de query (`application/x-www-form-urlencoded`) e analisado usando `parse_str`.
      * 4.  **Limpeza:** Remove a chave `_method` (se presente), que é frequentemente usada para simular métodos HTTP em formulários HTML.
      *
@@ -225,7 +225,7 @@ class Router {
         if(str_contains(haystack: $type, needle: 'application/json')) {
             $data = json_decode(json: $input, associative: true);
             if (json_last_error() !== JSON_ERROR_NONE) {
-                self::jsonError(
+                self::error(
                     code: 500,
                     msg: 'Erro ao decodificar JSON: ' . json_last_error_msg()
                 );
@@ -290,7 +290,7 @@ class Router {
         if ($allowAll || $isAllowed || self::$APP_SYS_MODE === 'DEV') {
             header(header: "Access-Control-Allow-Origin: $origin");
         } else {
-            self::jsonError(code: 403, msg: "Origin '{$origin}' not allowed by CORS.");
+            self::error(code: 403, msg: "Origin '{$origin}' not allowed by CORS.");
         }
 
         $allowedRequests = implode(separator: ', ', array: self::$allowedHttpRequests);
@@ -334,7 +334,7 @@ class Router {
         foreach ($middlewares as $middleware) {
             try {
                 if (!is_array(value: $middleware) || count(value: $middleware) < 2) {
-                    self::jsonError(code: 500, msg: "Invalid middleware format. Expected: [Class::class, 'method', ...args]");
+                    self::error(code: 500, msg: "Invalid middleware format. Expected: [Class::class, 'method', ...args]");
                 }
 
                 $class  = $middleware[0];
@@ -342,11 +342,11 @@ class Router {
                 $args   = array_slice(array: $middleware, offset: 2);
 
                 if (!class_exists(class: $class)) {
-                    self::jsonError(code: 500, msg: "Middleware class '{$class}' not found.");
+                    self::error(code: 500, msg: "Middleware class '{$class}' not found.");
                 }
 
                 if (!method_exists(object_or_class: $class, method: $method)) {
-                    self::jsonError(code: 500, msg: "Method '{$method}' does not exist in class '{$class}'.");
+                    self::error(code: 500, msg: "Method '{$method}' does not exist in class '{$class}'.");
                 }
 
                 $instance = new $class();
@@ -354,7 +354,7 @@ class Router {
 
                 // bloqueio simples
                 if ($result === false) {
-                    self::jsonError(code: 403, msg: "{$class}::{$method} blocked the request.");
+                    self::error(code: 403, msg: "{$class}::{$method} blocked the request.");
                 }
 
                 // bloqueio detalhado
@@ -381,7 +381,7 @@ class Router {
                     }
                 }
             } catch (Exception $e) {
-                self::jsonError(code: 500, msg: $e->getMessage());
+                self::error(code: 500, msg: $e->getMessage());
             }
         }
         return true;
@@ -421,7 +421,7 @@ class Router {
             $method = strtoupper(string: $_POST['_method']);
         }
         if (!in_array(needle: $method, haystack: self::$allowedHttpRequests)) {
-            self::jsonError(code: 405, msg: "HTTP method '{$method}' not allowed.");
+            self::error(code: 405, msg: "HTTP method '{$method}' not allowed.");
         }
 
         self::corsSetup(method: $method);
@@ -446,7 +446,7 @@ class Router {
             $action = $route['action'];
 
             if (!method_exists(object_or_class: $controller, method: $action)) {
-                self::jsonError(code: 500, msg: "Method {$action} not found.");
+                self::error(code: 500, msg: "Method '{$action}' not found.");
             }
 
             $params = self::prepareMethodParameters(method: $method, params: $requestData);
@@ -456,7 +456,7 @@ class Router {
             exit;
         }
 
-        self::jsonError(
+        self::error(
             code: 404,
             msg: 'Page not found.'
         );
