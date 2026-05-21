@@ -1,6 +1,6 @@
 {
     "name": "claudecio/krothiumapi",
-    "description": "Framework PHP para desenvolvimento rápido de aplicações web.",
+    "description": "Framework PHP para desenvolvimento rápido de api para aplicações web.",
     "type": "library",
     "license": "MIT",
     "autoload": {
