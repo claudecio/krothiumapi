@@ -25,7 +25,7 @@ class Router {
      * 2.  **Definição do Caminho Base (`$basePath`):** Verifica se a constante `ROUTER_BASE_PATH` está definida. Se estiver, define o caminho base da aplicação, garantindo que ele comece com `/`.
      * 3.  **Registro na Sessão:** Armazena o caminho base (`$basePath`) na sessão (`$_SESSION['ROUTER_BASE_PATH']`).
      * 4.  **Definição de Modos:** Define as propriedades estáticas `self::$ROUTER_MODE` (modo do roteador, e.g., 'JSON', 'WEB') e `self::$APP_SYS_MODE` (modo do sistema, e.g., 'DEV', 'PROD') com seus valores em 
-     *       caixa alta (uppercase).
+     * caixa alta (uppercase).
      * 5.  **Configuração de CORS:** Se o roteador estiver no modo 'JSON' e a constante `ROUTER_ALLOWED_ORIGINS` estiver definida, define os domínios permitidos para requisições *Cross-Origin* (CORS).
      *
      * @return void
@@ -84,8 +84,8 @@ class Router {
      * 1.  **Iteração:** Percorre o array estático que lista os nomes das constantes obrigatórias.
      * 2.  **Verificação:** Para cada nome de constante, ele usa `defined()` para verificar se a constante existe no escopo global do PHP.
      * 3.  **Ação em Caso de Falha:** Se uma constante obrigatória **não estiver definida**, o método assume uma falha crítica de configuração. 
-     *      Ele chama o método `self::error()`, que envia uma resposta JSON com o código HTTP **500 Internal Server Error** e uma mensagem 
-     *      detalhando qual constante está faltando, encerrando a execução do script.
+     * Ele chama o método `self::error()`, que envia uma resposta JSON com o código HTTP **500 Internal Server Error** e uma mensagem 
+     * detalhando qual constante está faltando, encerrando a execução do script.
      *
      * @return void Este método não retorna um valor em caso de sucesso; ele apenas garante que as constantes existam. Em caso de falha, ele envia uma resposta HTTP de erro e encerra o script.
      */
@@ -106,15 +106,19 @@ class Router {
     public static function get(string $uri, array $handler, array $middlewares = []): void {
         self::addRoute(method: 'GET', uri: $uri, handler: $handler, middlewares: $middlewares);
     }
+    
     public static function post(string $uri, array $handler, array $middlewares = []): void {
         self::addRoute(method: 'POST', uri: $uri, handler: $handler, middlewares: $middlewares);
     }
+    
     public static function put(string $uri, array $handler, array $middlewares = []): void {
         self::addRoute(method: 'PUT', uri: $uri, handler: $handler, middlewares: $middlewares);
     }
+    
     public static function patch(string $uri, array $handler, array $middlewares = []): void {
         self::addRoute(method: 'PATCH', uri: $uri, handler: $handler, middlewares: $middlewares);
     }
+    
     public static function delete(string $uri, array $handler, array $middlewares = []): void {
         self::addRoute(method: 'DELETE', uri: $uri, handler: $handler, middlewares: $middlewares);
     }
@@ -199,61 +203,14 @@ class Router {
     }
 
     /**
-     * Extrai os dados enviados no corpo da requisição HTTP para métodos específicos (PUT, DELETE, PATCH).
-     *
-     * Este método estático privado é crucial para APIs RESTful, pois os dados para métodos não-POST e não-GET (como PUT, PATCH e DELETE) 
-     * são enviados no corpo da requisição e não são automaticamente populados nas superglobais do PHP.
-     *
-     * #### Fluxo de Operação:
-     * 1.  **Verificação de Método:** Verifica se o método HTTP (`$method`) é um dos suportados ('PUT', 'DELETE', 'PATCH'). Se não for, retorna um array vazio.
-     * 2.  **Leitura do Input:** Lê o conteúdo bruto do corpo da requisição (`php://input`). Se estiver vazio, retorna um array vazio.
-     * 3.  **Processamento Condicional:**
-     * * **JSON (`application/json`):** Se o `Content-Type` for JSON, o conteúdo é decodificado. Se a decodificação falhar, o método chama `self::error()` para enviar uma resposta de erro HTTP 500 e encerrar a execução.
-     * * **Form Data (Outros):** Caso contrário, o conteúdo é tratado como uma string de query (`application/x-www-form-urlencoded`) e analisado usando `parse_str`.
-     * 4.  **Limpeza:** Remove a chave `_method` (se presente), que é frequentemente usada para simular métodos HTTP em formulários HTML.
-     *
-     * @param string $method O método HTTP da requisição (e.g., 'PUT', 'DELETE', 'PATCH').
-     * @return array Um array associativo contendo os dados extraídos do corpo da requisição.
-     * @return void Este método encerra a execução com uma resposta JSON de erro (código 500) em caso de falha na decodificação JSON.
-     */
-    private static function extractRequestData(string $method): array {
-        if(!in_array(needle: $method, haystack: ['PUT', 'DELETE', 'PATCH'])) return [];
-        $input = file_get_contents(filename: 'php://input');
-        if(empty($input)) return [];
-
-        $type = $_SERVER['CONTENT_TYPE'] ?? '';
-        if(str_contains(haystack: $type, needle: 'application/json')) {
-            $data = json_decode(json: $input, associative: true);
-            if (json_last_error() !== JSON_ERROR_NONE) {
-                self::error(
-                    code: 500,
-                    msg: 'Erro ao decodificar JSON: ' . json_last_error_msg()
-                );
-            }
-        } else {
-            parse_str(string: $input, result: $data);
-        }
-        return $data;
-    }
-
-    /**
      * Prepara e retorna o array final de parâmetros a ser passado para o método de ação do controlador.
      *
-     * Este método estático privado combina os parâmetros de rota dinâmicos extraídos do URI (`self::$params`) com quaisquer dados adicionais passados no corpo da requisição (`$params`), especificamente para métodos que enviam dados de forma não-tradicional (PUT, DELETE, PATCH).
+     * Este método estático privado retorna os parâmetros de rota dinâmicos extraídos do URI (`self::$params`).
      *
-     * #### Fluxo de Operação:
-     * 1.  **Verificação de Método:** Checa se o método HTTP é 'PUT', 'DELETE' ou 'PATCH'.
-     * 2.  **Combinação Condicional:**
-     * * **Se for PUT, DELETE ou PATCH:** Os parâmetros da rota (`self::$params`) são combinados com os dados do corpo da requisição (`$params`) usando `array_merge`.
-     * * **Se for GET, POST, etc.:** Apenas os parâmetros da rota (`self::$params`) são usados.
-     * 3.  **Normalização:** O array resultante é reindexado numericamente usando `array_values()` para garantir que os argumentos sejam passados corretamente para a função de ação do controlador.
-     *
-     * @param string $method O método HTTP da requisição (e.g., 'GET', 'POST', 'PUT').
-     * @param array|null $params Um array opcional contendo dados adicionais da requisição (geralmente o corpo do payload para PUT/PATCH/DELETE).
-     * @return array Um array indexado numericamente contendo a lista final de argumentos para o método do controlador.
+     * @return array Um array indexado numericamente contendo a lista final de argumentos de rota para o método do controlador.
      */
-    private static function prepareMethodParameters(string $method, ?array $params = []): array {
-        return array_values(array: in_array(needle: $method, haystack: ['PUT', 'DELETE', 'PATCH']) ? array_merge(self::$params, $params) : self::$params);
+    private static function prepareMethodParameters(): array {
+        return array_values(array: self::$params);
     }
 
     /**
@@ -312,8 +269,6 @@ class Router {
      * suporta injeção dinâmica de argumentos para os middlewares e oferece dois níveis de bloqueio: 
      * um booleano simples e um detalhado com respostas JSON customizadas.
      *
-     * 
-     *
      * ---
      * ## Mecanismo de Execução
      * 1. **Validação de Formato:** Verifica se a definição do middleware segue o padrão esperado: `[Classe, 'metodo', ...argumentos]`.
@@ -322,10 +277,6 @@ class Router {
      * - **Bloqueio Booleano:** Se o middleware retornar explicitamente `false`, a requisição é negada com um erro 403 padrão.
      * - **Bloqueio Estruturado:** Se retornar um `array`, o método analisa chaves como `block`, `status` e `response_code` para montar uma resposta JSON rica e encerrar o script.
      * 4. **Continuidade:** Se todos os middlewares retornarem `true` (ou um array indicando sucesso), o fluxo retorna `true`, permitindo que o `dispatch()` prossiga para o controlador.
-     *
-     * ---
-     * ## Tratamento de Erros de Configuração
-     * - **500 Internal Server Error:** Disparado se a classe do middleware não existir, se o método for inválido ou se ocorrer uma exceção durante a execução lógica do filtro.
      *
      * @param array $middlewares Lista de arrays contendo a definição dos middlewares da rota.
      * @return bool Retorna `true` se a requisição passou por todos os filtros sem ser bloqueada.
@@ -367,9 +318,11 @@ class Router {
                         $code = (int) ($result['response_code'] ?? 403);
                         $msg  = (string) ($result['message'] ?? 'Blocked by middleware');
                         $json_response = [
-                            "status" => $result['status'] ?? 'error',
                             "message" => $msg ?? "{$class}::{$method} blocked the request."
                         ];
+                        if (!empty($result['status'])) {
+                            $json_response['status'] = $result['status'];
+                        }
                         if(isset($result['output']) && (!empty($result['output']) || $result['output'] !== null || $result['output'] !== '')) {
                             $json_response['output'] = $result['output'];
                         }
@@ -391,25 +344,9 @@ class Router {
      * Orquestra o ciclo de vida da requisição, realizando o roteamento e a execução do controlador.
      * * Este método é o ponto de entrada principal (Front Controller) que transforma uma requisição 
      * HTTP bruta em uma ação de software. Ele gerencia desde a validação de constantes de ambiente 
-     * até a resolução de parâmetros dinâmicos, passando por suporte a emulação de métodos REST 
+     * até a resolução de parâmetros dinâmicos da URL, passando por suporte a emulação de métodos REST 
      * (via `_method`), configuração de CORS, execução de Middlewares e, por fim, a invocação do 
      * par Controller/Action correspondente.
-     * * 
-     * * ---
-     * ## Fluxo de Processamento
-     * 1. **Sanitização de URI:** Extrai o caminho da URL e remove o prefixo global (`basePath`), normalizando a rota para comparação.
-     * 2. **Emulação de Verbos:** Detecta campos `_method` em requisições POST para suportar verbos como PUT, PATCH e DELETE em ambientes que não os suportam nativamente.
-     * 3. **Segurança e CORS:** Valida se o método HTTP é permitido e configura os cabeçalhos de Cross-Origin Resource Sharing.
-     * 4. **Match de Rotas:** Percorre as rotas registradas. Para cada correspondência:
-     * - **Middlewares:** Executa camadas de pré-processamento (Autenticação, Logs, etc.). Se um middleware falhar, a execução é interrompida.
-     * - **Injeção de Parâmetros:** Prepara os argumentos necessários para o método do controlador (como IDs de URL ou dados de payload).
-     * 5. **Execução:** Instancia o controlador dinamicamente e invoca a ação via `call_user_func_array`.
-     * 6. **Fallback 404:** Caso nenhuma rota coincida com a URI e o método, encerra a execução com um erro de "Página não encontrada".
-     * * ---
-     * ## Tratamento de Erros
-     * - **405 Method Not Allowed:** Quando o método HTTP não está na lista branca.
-     * - **500 Internal Server Error:** Quando a classe do controlador existe, mas o método (Action) não foi definido.
-     * - **404 Not Found:** Quando a rota solicitada não existe no mapa de rotas.
      * * @return void Este método encerra a execução do script (`exit`) ao encontrar e executar uma rota válida.
      */
     public static function dispatch(): void {
@@ -432,11 +369,9 @@ class Router {
         }
         $uri = trim(string: $uri, characters: '/');
 
-        // payload (PUT/PATCH/DELETE)
-        $requestData = self::extractRequestData(method: $method);
-
         foreach (self::$routes[$method] ?? [] as $route) {
             if (!self::matchRoute(method: $method, uri: $uri, route: $route)) continue;
+            
             // roda middlewares (se barrar, o runMiddlewares já respondeu JSON)
             if (!empty($route['middlewares']) && !self::runMiddlewares(middlewares: $route['middlewares'])) {
                 return;
@@ -449,7 +384,7 @@ class Router {
                 self::error(code: 500, msg: "Method '{$action}' not found.");
             }
 
-            $params = self::prepareMethodParameters(method: $method, params: $requestData);
+            $params = self::prepareMethodParameters();
 
             // se teu controller já dá echo/json, tu nem precisa setar 200/header aqui
             call_user_func_array(callback: [$controller, $action], args: $params);
