@@ -320,9 +320,6 @@ class Router {
                         $json_response = [
                             "message" => $msg ?? "{$class}::{$method} blocked the request."
                         ];
-                        if (!empty($result['status'])) {
-                            $json_response['status'] = $result['status'];
-                        }
                         if(isset($result['output']) && (!empty($result['output']) || $result['output'] !== null || $result['output'] !== '')) {
                             $json_response['output'] = $result['output'];
                         }
