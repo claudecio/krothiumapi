@@ -66,7 +66,6 @@ class Router {
         http_response_code(response_code: $code);
         header(header: 'Content-Type: application/json; charset=utf-8');
         echo json_encode(value: [
-            "status" => 'error',
             "message" => $msg
             ]
         );
@@ -312,8 +311,9 @@ class Router {
                 if (is_array(value: $result)) {
                     $block = $result['block'] ?? null;
                     $status = $result['status'] ?? null;
+                    $response_code = (int) $result['response_code'] ?? null;
 
-                    $shouldBlock = ($block === true) || ($status !== null && $status !== 'success');
+                    $shouldBlock = ($block === true) || ($status !== null && $status !== 'success') || (in_array(needle: $response_code, haystack: [403, 401, 500, 422]));
                     if ($shouldBlock) {
                         $code = (int) ($result['response_code'] ?? 403);
                         $msg  = (string) ($result['message'] ?? 'Blocked by middleware');
@@ -324,7 +324,7 @@ class Router {
                             $json_response['output'] = $result['output'];
                         }
 
-                        http_response_code(response_code: $code);
+                        http_response_code(response_code: $response_code);
                         header(header: 'Content-Type: application/json; charset=utf-8');
                         echo json_encode(value: $json_response);
                         exit;
