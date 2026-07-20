@@ -5,13 +5,14 @@ use Exception;
 use KrothiumAPI\Helpers\ConstHelper;
 
 class Router {
-    private static $routes = [];
-    private static $params = [];
-    private static $APP_SYS_MODE = null;
+    private static array $routes = [];
+    private static array $params = [];
+    private static ?string $APP_SYS_MODE = null;
     private static string $basePath = '';
-    private static $currentGroupPrefix = '';
-    private static $currentGroupMiddlewares = [];
-    private static $ROUTER_ALLOWED_ORIGINS = ['*'];
+    private static string $currentGroupPrefix = '';
+    private static array $currentGroupMiddlewares = [];
+    private static array $middlewareRegistry = [];
+    private static array $ROUTER_ALLOWED_ORIGINS = ['*'];
     private static array $requiredConstants = ['APP_SYS_MODE'];
     private static array $allowedHttpRequests = ['GET','POST','PUT','PATCH','DELETE','OPTIONS'];
 
@@ -102,24 +103,49 @@ class Router {
     // =====================================
     // Métodos HTTP para definição de rotas
     // =====================================
-    public static function get(string $uri, array $handler, array $middlewares = []): void {
+    public static function get(string $uri, array|string $handler, array $middlewares = []): void {
         self::addRoute(method: 'GET', uri: $uri, handler: $handler, middlewares: $middlewares);
     }
     
-    public static function post(string $uri, array $handler, array $middlewares = []): void {
+    public static function post(string $uri, array|string $handler, array $middlewares = []): void {
         self::addRoute(method: 'POST', uri: $uri, handler: $handler, middlewares: $middlewares);
     }
     
-    public static function put(string $uri, array $handler, array $middlewares = []): void {
+    public static function put(string $uri, array|string $handler, array $middlewares = []): void {
         self::addRoute(method: 'PUT', uri: $uri, handler: $handler, middlewares: $middlewares);
     }
     
-    public static function patch(string $uri, array $handler, array $middlewares = []): void {
+    public static function patch(string $uri, array|string $handler, array $middlewares = []): void {
         self::addRoute(method: 'PATCH', uri: $uri, handler: $handler, middlewares: $middlewares);
     }
     
-    public static function delete(string $uri, array $handler, array $middlewares = []): void {
+    public static function delete(string $uri, array|string $handler, array $middlewares = []): void {
         self::addRoute(method: 'DELETE', uri: $uri, handler: $handler, middlewares: $middlewares);
+    }
+
+    public static function any(string $uri, array|string $handler, array $middlewares = []): void {
+        foreach (['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as $method) {
+            self::addRoute(method: $method, uri: $uri, handler: $handler, middlewares: $middlewares);
+        }
+    }
+
+    public static function resource(string $uri, string $controller, array $middlewares = []): void {
+        $baseUri = '/' . trim(string: $uri, characters: '/');
+
+        self::get($baseUri, [$controller, 'index'], $middlewares);
+        self::get($baseUri . '/{id}', [$controller, 'show'], $middlewares);
+        self::post($baseUri, [$controller, 'store'], $middlewares);
+        self::put($baseUri . '/{id}', [$controller, 'update'], $middlewares);
+        self::patch($baseUri . '/{id}', [$controller, 'update'], $middlewares);
+        self::delete($baseUri . '/{id}', [$controller, 'destroy'], $middlewares);
+    }
+
+    public static function defineMiddleware(string $name, array $middleware): void {
+        self::$middlewareRegistry[strtolower(string: $name)] = $middleware;
+    }
+
+    public static function defineMiddlewareStack(string $name, array $middlewares): void {
+        self::$middlewareRegistry[strtolower(string: $name)] = $middlewares;
     }
 
     /**
@@ -133,15 +159,16 @@ class Router {
      * @param array $middlewares Um array opcional de middlewares específicos desta rota.
      * @return void
      */
-    private static function addRoute(string $method, string $uri, array $handler, array $middlewares = []) {
+    private static function addRoute(string $method, string $uri, array|string $handler, array $middlewares = []) {
         $path = '/' . trim(string: self::$currentGroupPrefix . '/' . trim(string: $uri, characters: '/'), characters: '/');
-        [$controller, $action] = $handler;
+        [$controller, $action] = self::normalizeHandler(handler: $handler);
+        $resolvedMiddlewares = self::resolveMiddlewares(middlewares: array_merge(self::$currentGroupMiddlewares, $middlewares));
         self::$routes[$method][] = [
             'method' => $method,
             'path' => $path,
             'controller' => $controller,
             'action' => $action,
-            'middlewares' => array_merge(self::$currentGroupMiddlewares, $middlewares)
+            'middlewares' => $resolvedMiddlewares
         ];
     }
 
@@ -167,11 +194,63 @@ class Router {
     
         self::$currentGroupPrefix = $previousPrefix . $prefix;
         self::$currentGroupMiddlewares = array_merge($previousMiddlewares, $middlewares);
-    
-        $callback();
-    
-        self::$currentGroupPrefix = $previousPrefix;
-        self::$currentGroupMiddlewares = $previousMiddlewares;
+
+        try {
+            $callback();
+        } finally {
+            self::$currentGroupPrefix = $previousPrefix;
+            self::$currentGroupMiddlewares = $previousMiddlewares;
+        }
+    }
+
+    private static function normalizeHandler(array|string $handler): array {
+        if (is_string($handler)) {
+            if (!str_contains($handler, '@')) {
+                self::error(code: 500, msg: "Invalid handler format. Expected: ['Controller', 'method'] or 'Controller@method'.");
+            }
+
+            return explode(separator: '@', string: $handler, limit: 2);
+        }
+
+        if (count($handler) < 2) {
+            self::error(code: 500, msg: "Invalid handler format. Expected: ['Controller', 'method'] or 'Controller@method'.");
+        }
+
+        return array_values(array: array_slice(array: $handler, offset: 0, length: 2));
+    }
+
+    private static function resolveMiddlewares(array $middlewares, array $stack = []): array {
+        $resolved = [];
+
+        foreach ($middlewares as $middleware) {
+            if (is_string($middleware)) {
+                $registryKey = strtolower(string: $middleware);
+                if (!isset(self::$middlewareRegistry[$registryKey])) {
+                    self::error(code: 500, msg: "Middleware alias '{$middleware}' not defined.");
+                }
+
+                if (in_array(needle: $registryKey, haystack: $stack, strict: true)) {
+                    self::error(code: 500, msg: "Circular middleware alias detected: '{$middleware}'.");
+                }
+
+                $resolved = array_merge(
+                    $resolved,
+                    self::resolveMiddlewares(
+                        middlewares: self::$middlewareRegistry[$registryKey],
+                        stack: array_merge($stack, [$registryKey])
+                    )
+                );
+                continue;
+            }
+
+            if (!is_array($middleware) || count(value: $middleware) < 2) {
+                self::error(code: 500, msg: "Invalid middleware format. Expected: [Class::class, 'method', ...args] or a defined alias.");
+            }
+
+            $resolved[] = $middleware;
+        }
+
+        return $resolved;
     }
 
     /**
