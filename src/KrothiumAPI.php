@@ -6,6 +6,35 @@ use KrothiumAPI\Helpers\ConstHelper;
 use KrothiumAPI\Services\LoggerService;
 
 class KrothiumAPI {
+    private static array $defaultConfig = [
+        'app' => [
+            'mode' => 'DEV',
+        ],
+        'paths' => [
+            'root' => null,
+            'src' => null,
+            'module' => null,
+            'storage' => null,
+            'component' => null,
+        ],
+        'router' => [
+            'base_path' => '',
+            'allowed_origins' => ['*'],
+        ],
+        'system' => [
+            'enable_session' => true,
+            'default_timezone' => 'UTC',
+        ],
+        'errors' => [
+            'error_log' => null,
+        ],
+        'logger' => [
+            'driver' => null,
+            'logDir' => null,
+        ],
+        'constants' => [],
+    ];
+
     private static array $config;
 
     /**
@@ -28,16 +57,17 @@ class KrothiumAPI {
      * @return void
      */
     public static function init(array $config = []) {
-        self::$config = $config;
+        self::$config = self::normalizeConfig($config);
         self::setupConstants();
-        // Inicia o router
-        Router::init();
-        
         self::setupErrors();
         self::setupSession();
         self::setupTimezone();
         self::setupLogger();
         self::setupErrorHandlers();
+    }
+
+    private static function normalizeConfig(array $config): array {
+        return array_replace_recursive(self::$defaultConfig, $config);
     }
 
     /**
@@ -50,7 +80,7 @@ class KrothiumAPI {
             ini_set(option: 'display_startup_errors', value: 1);
             ini_set(option: 'log_errors', value: E_ALL);
             error_reporting(error_level: 1);
-            if(isset($errors['error_log'])) {
+            if(!empty($errors['error_log'])) {
                 ini_set(option: 'error_log', value: $errors['error_log']);
             }
         }
@@ -60,12 +90,27 @@ class KrothiumAPI {
      * Configura constantes
      */
     private static function setupConstants() {
-        $constants = self::$config['constants'];
-        if(!empty($constants)) {
-            foreach ($constants as $name => $value) {
-                if (!defined(constant_name: $name)) {
-                    define(constant_name: $name, value: $value);
-                }
+        $constants = array_merge(
+            [
+                'APP_SYS_MODE' => self::$config['app']['mode'],
+                'ROOT_SYSTEM_PATH' => self::$config['paths']['root'],
+                'INI_SYSTEM_PATH' => self::$config['paths']['src'],
+                'MODULE_PATH' => self::$config['paths']['module'],
+                'STORAGE_FOLDER_PATH' => self::$config['paths']['storage'],
+                'COMPONENT_PATH' => self::$config['paths']['component'],
+                'ROUTER_BASE_PATH' => self::$config['router']['base_path'],
+                'ROUTER_ALLOWED_ORIGINS' => self::$config['router']['allowed_origins'],
+            ],
+            self::$config['constants']
+        );
+
+        foreach ($constants as $name => $value) {
+            if ($value === null) {
+                continue;
+            }
+
+            if (!defined(constant_name: $name)) {
+                define(constant_name: $name, value: $value);
             }
         }
     }
@@ -172,6 +217,7 @@ class KrothiumAPI {
      */
     public static function routerDispatch() {
         if (php_sapi_name() !== 'cli') {
+            Router::init();
             Router::dispatch();
         }
     }
