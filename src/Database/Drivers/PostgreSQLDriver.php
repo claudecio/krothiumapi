@@ -11,14 +11,14 @@ class PostgreSQLDriver extends PDOAbstract {
     }
 
     protected function connect(string $envName, ?string $schema = null): void {
-        $host   = $_ENV["{$envName}_DB_HOST"];
-        $port   = $_ENV["{$envName}_DB_PORT"] ?? 5432;
-        $dbname = $_ENV["{$envName}_DB_NAME"];
-        $user   = $_ENV["{$envName}_DB_USERNAME"];
-        $pass   = $_ENV["{$envName}_DB_PASSWORD"];
-        $schema ??= $_ENV["{$envName}_DB_SCHEMA"] ?? 'public';
-        $systemTimeZone = $_ENV["{$envName}_DB_TIMEZONE"] ?? 'UTC';
-        $sslMode = $_ENV["{$envName}_DB_SSLMODE"] ?? 'disable'; // disable, require, verify-ca, verify-full
+        $host   = $this->envValue(key: 'DB_HOST', envName: $envName);
+        $port   = $this->envValue(key: 'DB_PORT', default: 5432, envName: $envName);
+        $dbname = $this->envValue(key: 'DB_NAME', envName: $envName);
+        $user   = $this->envValue(key: 'DB_USERNAME', envName: $envName);
+        $pass   = $this->envValue(key: 'DB_PASSWORD', envName: $envName);
+        $schema ??= $this->envValue(key: 'DB_SCHEMA', default: 'public', envName: $envName);
+        $systemTimeZone = $this->envValue(key: 'DB_TIMEZONE', default: 'UTC', envName: $envName);
+        $sslMode = $this->envValue(key: 'DB_SSLMODE', default: 'disable', envName: $envName); // disable, require, verify-ca, verify-full
 
         try {
             $this->connection = new PDO(
@@ -26,7 +26,7 @@ class PostgreSQLDriver extends PDOAbstract {
                 username: $user,
                 password: $pass,
                 options: [
-                    PDO::ATTR_PERSISTENT => false,
+                    PDO::ATTR_PERSISTENT => $this->envBool(key: 'DB_PERSISTENT', default: true, envName: $envName),
                     PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                 ]

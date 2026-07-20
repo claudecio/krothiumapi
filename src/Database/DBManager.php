@@ -34,7 +34,10 @@ class DBManager {
         $connectionName = strtoupper(string: $connectionName);
         $key = $connectionName . ($schema ? "_$schema" : '');
         if (!isset(self::$connections[$key])) {
-            $driver = $_ENV["{$connectionName}_DB_DRIVER"];
+            $driver = $_ENV["{$connectionName}_DB_DRIVER"] ?? $_ENV['DB_DRIVER'] ?? null;
+            if ($driver === null) {
+                throw new RuntimeException(message: "Database driver not defined for connection '{$connectionName}'.");
+            }
             switch (strtolower(string: $driver)) {
                 case 'mysql':
                     $conn = new MySQLDriver(envName: $connectionName);
