@@ -6,7 +6,7 @@ use Dotenv\Dotenv;
 use KrothiumAPI\KrothiumAPI;
 
 // Carrega variáveis de ambiente
-$dotenv = Dotenv::createImmutable(paths: realpath(path: __DIR__ . '/../'));
+$dotenv = Dotenv::createImmutable(paths: __DIR__ . '/..');
 $dotenv->load();
 
 // ======================================
@@ -14,17 +14,17 @@ $dotenv->load();
 // ======================================
 KrothiumAPI::init(config: [
     'app' => [
-        'mode' => 'DEV', // DEV | PROD
+        'mode' => $_ENV['APP_MODE'] ?? 'DEV', // DEV | PROD
     ],
     'paths' => [
-        'root' => realpath(path: __DIR__ . "/.."),
-        'src' => realpath(path: __DIR__ . "/../src"),
-        'module' => realpath(path: __DIR__ . "/../src/Module"),
-        'storage' => realpath(path: __DIR__ . "/../storage"),
-        'component' => realpath(path: __DIR__ . "/../src/Common/Component"),
+        'root' => __DIR__ . '/..',
+        'src' => __DIR__ . '/../app',
+        'module' => __DIR__ . '/../app/Module',
+        'storage' => __DIR__ . '/../storage',
+        'component' => __DIR__ . '/../app/Common/Component',
     ],
     'router' => [
-        'base_path' => '',
+        'base_path' => $_ENV['ROUTER_BASE_PATH'] ?? '',
         'allowed_origins' => ['*'],
     ],
     'system' => [
@@ -32,11 +32,11 @@ KrothiumAPI::init(config: [
         'default_timezone' => 'America/Fortaleza',
     ],
     'errors' => [
-        'error_log' => realpath(path: __DIR__ . '/../storage/Logs/php-error.log'),
+        'error_log' => __DIR__ . '/../storage/Logs/php-error.log',
     ],
     'logger' => [
         'driver' => 'FILE',
-        'logDir' => realpath(path: __DIR__ . '/../storage/Logs')
+        'logDir' => __DIR__ . '/../storage/Logs'
     ],
     'constants' => [
         // Constantes extras específicas da aplicação, se precisar.
