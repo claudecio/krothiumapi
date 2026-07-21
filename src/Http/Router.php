@@ -66,10 +66,7 @@ class Router {
     private static function error(int $code, string $msg): void {
         http_response_code(response_code: $code);
         header(header: 'Content-Type: application/json; charset=utf-8');
-        echo json_encode(value: [
-            "message" => $msg
-            ]
-        );
+        echo json_encode(value: ["message" => $msg]);
         exit;
     }
 
@@ -92,9 +89,7 @@ class Router {
     private static function checkRequiredConstants(): void {
         foreach (self::$requiredConstants as $constant) {
             if (!defined(constant_name: $constant)) {
-                self::error(
-                    code: 500,
-                    msg: "Constant '{$constant}' not defined."
+                self::error(code: 500, msg: "Constant '{$constant}' not defined."
                 );
             }
         }
@@ -133,11 +128,11 @@ class Router {
         $baseUri = '/' . trim(string: $uri, characters: '/');
 
         self::get($baseUri, [$controller, 'index'], $middlewares);
-        self::get($baseUri . '/{id}', [$controller, 'show'], $middlewares);
-        self::post($baseUri, [$controller, 'store'], $middlewares);
+        self::get($baseUri . '/{id}', [$controller, 'read'], $middlewares);
+        self::post($baseUri, [$controller, 'create'], $middlewares);
         self::put($baseUri . '/{id}', [$controller, 'update'], $middlewares);
         self::patch($baseUri . '/{id}', [$controller, 'update'], $middlewares);
-        self::delete($baseUri . '/{id}', [$controller, 'destroy'], $middlewares);
+        self::delete($baseUri . '/{id}', [$controller, 'delete'], $middlewares);
     }
 
     public static function defineMiddleware(string $name, array $middleware): void {
@@ -391,18 +386,16 @@ class Router {
                     $block = $result['block'] ?? null;
                     $status = $result['status'] ?? null;
                     $response_code = (int) $result['response_code'] ?? null;
-
                     $shouldBlock = ($block === true) || ($status !== null && $status !== 'success') || (in_array(needle: $response_code, haystack: [403, 401, 500, 422]));
                     if ($shouldBlock) {
                         $code = (int) ($result['response_code'] ?? 403);
                         $msg  = (string) ($result['message'] ?? 'Blocked by middleware');
-                        $json_response = [
-                            "message" => $msg ?? "{$class}::{$method} blocked the request."
-                        ];
+                        $json_response = ["message" => $msg ?? "{$class}::{$method} blocked the request."];
                         if(isset($result['output']) && (!empty($result['output']) || $result['output'] !== null || $result['output'] !== '')) {
                             $json_response['output'] = $result['output'];
                         }
 
+                        // Envia a resposta JSON e encerra a execução
                         http_response_code(response_code: $response_code);
                         header(header: 'Content-Type: application/json; charset=utf-8');
                         echo json_encode(value: $json_response);
@@ -439,7 +432,7 @@ class Router {
 
         self::corsSetup(method: $method);
 
-        // remove basePath
+        // Remove basePath
         if (!empty(self::$basePath) && str_starts_with(haystack: $uri, needle: trim(string: self::$basePath, characters: '/'))) {
             $uri = substr(string: $uri, offset: strlen(string: trim(string: self::$basePath, characters: '/')));
         }
@@ -447,22 +440,18 @@ class Router {
 
         foreach (self::$routes[$method] ?? [] as $route) {
             if (!self::matchRoute(method: $method, uri: $uri, route: $route)) continue;
-            
-            // roda middlewares (se barrar, o runMiddlewares já respondeu JSON)
+            // Roda middlewares (se barrar, o runMiddlewares retorna JSON)
             if (!empty($route['middlewares']) && !self::runMiddlewares(middlewares: $route['middlewares'])) {
                 return;
             }
 
             $controller = new $route['controller']();
             $action = $route['action'];
-
             if (!method_exists(object_or_class: $controller, method: $action)) {
                 self::error(code: 500, msg: "Method '{$action}' not found.");
             }
 
             $params = self::prepareMethodParameters();
-
-            // se teu controller já dá echo/json, tu nem precisa setar 200/header aqui
             call_user_func_array(callback: [$controller, $action], args: $params);
             exit;
         }
