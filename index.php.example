@@ -6,34 +6,40 @@ use Dotenv\Dotenv;
 use KrothiumAPI\KrothiumAPI;
 
 // Carrega variáveis de ambiente
-$dotenv = Dotenv::createImmutable(paths: realpath(path: __DIR__ . '/../'));
+$dotenv = Dotenv::createImmutable(paths: __DIR__ . '/..');
 $dotenv->load();
 
 // ======================================
 // Inicializa KrothiumAPI com configs
 // ======================================
 KrothiumAPI::init(config: [
-    'errors' => [
-        'error_log' => realpath(path: __DIR__ . '/../storage/Logs/php-error.log'),
+    'app' => [
+        'mode' => $_ENV['APP_MODE'] ?? 'DEV', // DEV | PROD
     ],
-    'constants' => [
-        'APP_SYS_MODE' => 'DEV', // DEV | PROD
-        'ROOT_SYSTEM_PATH' => realpath(path: __DIR__ . "/.."),
-        'INI_SYSTEM_PATH' => realpath(path: __DIR__ . "/../src"),
-        'MODULE_PATH' => realpath(path: __DIR__ . "/../src/Module"),
-        'STORAGE_FOLDER_PATH' => realpath(path: __DIR__ . "/../storage"),
-        'COMPONENT_PATH' => realpath(path: __DIR__ . "/../src/Common/Component"),
-        'ROUTER_ALLOWED_ORIGINS' => [
-            '*'
-        ]
+    'paths' => [
+        'root' => __DIR__ . '/..',
+        'src' => __DIR__ . '/../app',
+        'module' => __DIR__ . '/../app/Module',
+        'storage' => __DIR__ . '/../storage',
+        'component' => __DIR__ . '/../app/Common/Component',
+    ],
+    'router' => [
+        'base_path' => $_ENV['ROUTER_BASE_PATH'] ?? '',
+        'allowed_origins' => ['*'],
     ],
     'system' => [
         'enable_session' => true,
         'default_timezone' => 'America/Fortaleza',
     ],
+    'errors' => [
+        'error_log' => __DIR__ . '/../storage/Logs/php-error.log',
+    ],
     'logger' => [
         'driver' => 'FILE',
-        'logDir' => realpath(path: __DIR__ . '/../storage/Logs')
+        'logDir' => __DIR__ . '/../storage/Logs'
+    ],
+    'constants' => [
+        // Constantes extras específicas da aplicação, se precisar.
     ]
 ]);
 

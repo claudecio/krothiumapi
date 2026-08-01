@@ -7,12 +7,12 @@ use RuntimeException;
 
 class MySQLDriver extends PDOAbstract {
     protected function connect(string $envName): void {
-        $host = $_ENV["{$envName}_DB_HOST"];
-        $port = $_ENV["{$envName}_DB_PORT"] ?? 3306;
-        $dbname = $_ENV["{$envName}_DB_NAME"];
-        $user = $_ENV["{$envName}_DB_USERNAME"];
-        $password = $_ENV["{$envName}_DB_PASSWORD"];
-        $charset = $_ENV["{$envName}_DB_CHARSET"] ?? 'utf8mb4';
+        $host = $this->envValue(key: 'DB_HOST', envName: $envName);
+        $port = $this->envValue(key: 'DB_PORT', default: 3306, envName: $envName);
+        $dbname = $this->envValue(key: 'DB_NAME', envName: $envName);
+        $user = $this->envValue(key: 'DB_USERNAME', envName: $envName);
+        $password = $this->envValue(key: 'DB_PASSWORD', envName: $envName);
+        $charset = $this->envValue(key: 'DB_CHARSET', default: 'utf8mb4', envName: $envName);
 
         try {
             $this->connection = new PDO(
@@ -20,7 +20,7 @@ class MySQLDriver extends PDOAbstract {
                 username: $user,
                 password: $password,
                 options: [
-                    PDO::ATTR_PERSISTENT => true,
+                    PDO::ATTR_PERSISTENT => $this->envBool(key: 'DB_PERSISTENT', default: true, envName: $envName),
                     PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                 ]
