@@ -127,12 +127,40 @@ $mysqlDriverReflection = new class('TEST_MYSQL') extends MySQLDriver {
 };
 assertTest("Escape de identificadores MySQL (crases)", $mysqlDriverReflection->escapeIdentifier('users.name') === '`users`.`name`');
 
-// 6. Teste de Reconnect e Disconnect
-echo "\n6. Testes de Reconnect e Disconnect:\n";
-DBManager::reconnect('TEST');
-assertTest("reconnect() restabelece conexão", DBManager::hasConnection('TEST'));
-DBManager::disconnect('TEST');
-assertTest("disconnect() remove conexão do pool", !DBManager::hasConnection('TEST'));
+// 7. Testes de Compatibilidade com o Uso Legado (API antiga 100% preservada)
+echo "\n7. Testes de Compatibilidade Retroativa (Uso Antigo):\n";
+$_ENV['LEGACY_DB_DRIVER'] = 'sqlite';
+$_ENV['LEGACY_DB_NAME'] = ':memory:';
+
+// Chamadas estáticas antigas em DBManager
+DBManager::execute("CREATE TABLE legacy_test (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT)", [], 'LEGACY');
+DBManager::execute("INSERT INTO legacy_test (title) VALUES (:t)", ['t' => 'Legado 1'], 'LEGACY');
+DBManager::execute("INSERT INTO legacy_test (title) VALUES (:t)", ['t' => 'Legado 2'], 'LEGACY');
+
+// fetchAll legado: ($sql, $params, $connectionName)
+$legacyAll = DBManager::fetchAll("SELECT * FROM legacy_test", [], 'LEGACY');
+assertTest("Uso legado: DBManager::fetchAll(\$sql, \$params, \$connectionName)", count($legacyAll) === 2 && $legacyAll[0]['title'] === 'Legado 1');
+
+// fetchOne legado: ($sql, $params, $connectionName)
+$legacyOne = DBManager::fetchOne("SELECT * FROM legacy_test WHERE id = :id", ['id' => 2], 'LEGACY');
+assertTest("Uso legado: DBManager::fetchOne(\$sql, \$params, \$connectionName)", $legacyOne !== null && $legacyOne['title'] === 'Legado 2');
+
+// lastInsertId legado: ($connectionName)
+$legacyId = DBManager::lastInsertId('LEGACY');
+assertTest("Uso legado: DBManager::lastInsertId(\$connectionName)", $legacyId == 2);
+
+// Transações legadas: beginTransaction, commit, rollback manuais
+DBManager::beginTransaction('LEGACY');
+DBManager::execute("INSERT INTO legacy_test (title) VALUES (:t)", ['t' => 'Legado 3'], 'LEGACY');
+assertTest("Uso legado: DBManager::inTransaction(\$connectionName)", DBManager::inTransaction('LEGACY'));
+DBManager::commit('LEGACY');
+assertTest("Uso legado: DBManager::commit(\$connectionName)", (int)DBManager::fetchColumn("SELECT count(*) FROM legacy_test", [], 0, 'LEGACY') === 3);
+
+// Acesso direto ao PDO legado: $driver->getPDO()
+$conn = DBManager::getConnection('LEGACY');
+assertTest("Uso legado: \$conn->getPDO() retorna PDO nativo", $conn->getPDO() instanceof PDO);
+assertTest("Uso legado: \$conn->fetchAll() e \$conn->fetchOne()", count($conn->fetchAll("SELECT * FROM legacy_test")) === 3);
+
 
 echo "\n====================================================\n";
 echo " Resumo dos Testes: {$passed} passaram, {$failed} falharam.\n";

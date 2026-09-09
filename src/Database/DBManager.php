@@ -156,49 +156,90 @@ class DBManager {
     /**
      * Executa uma consulta e retorna todas as linhas.
      */
-    public static function fetchAll(string $sql, array $params = [], int $fetchMode = PDO::FETCH_ASSOC, string $connectionName = 'DEFAULT', ?string $schema = null): array {
+    public static function fetchAll(
+        string $sql,
+        array $params = [],
+        string $connectionName = 'DEFAULT',
+        ?string $schema = null,
+        int $fetchMode = PDO::FETCH_ASSOC
+    ): array {
         return self::getConnection(connectionName: $connectionName, schema: $schema)->fetchAll($sql, $params, $fetchMode);
     }
 
     /**
      * Executa uma consulta e retorna a primeira linha ou null.
      */
-    public static function fetchOne(string $sql, array $params = [], int $fetchMode = PDO::FETCH_ASSOC, string $connectionName = 'DEFAULT', ?string $schema = null): ?array {
+    public static function fetchOne(
+        string $sql,
+        array $params = [],
+        string $connectionName = 'DEFAULT',
+        ?string $schema = null,
+        int $fetchMode = PDO::FETCH_ASSOC
+    ): ?array {
         return self::getConnection(connectionName: $connectionName, schema: $schema)->fetchOne($sql, $params, $fetchMode);
     }
 
     /**
      * Executa uma consulta e retorna uma única coluna.
      */
-    public static function fetchColumn(string $sql, array $params = [], int $columnIndex = 0, string $connectionName = 'DEFAULT', ?string $schema = null): mixed {
+    public static function fetchColumn(
+        string $sql,
+        array $params = [],
+        int $columnIndex = 0,
+        string $connectionName = 'DEFAULT',
+        ?string $schema = null
+    ): mixed {
         return self::getConnection(connectionName: $connectionName, schema: $schema)->fetchColumn($sql, $params, $columnIndex);
     }
 
     /**
      * Executa uma consulta e retorna a contagem de linhas afetadas.
      */
-    public static function rowCount(string $sql, array $params = [], string $connectionName = 'DEFAULT', ?string $schema = null): int {
+    public static function rowCount(
+        string $sql,
+        array $params = [],
+        string $connectionName = 'DEFAULT',
+        ?string $schema = null
+    ): int {
         return self::getConnection(connectionName: $connectionName, schema: $schema)->rowCount($sql, $params);
     }
 
     /**
      * Helper de inserção de dados em uma tabela.
      */
-    public static function insert(string $table, array $data, string $connectionName = 'DEFAULT', ?string $schema = null): string|int|bool {
+    public static function insert(
+        string $table,
+        array $data,
+        string $connectionName = 'DEFAULT',
+        ?string $schema = null
+    ): string|int|bool {
         return self::getConnection(connectionName: $connectionName, schema: $schema)->insert($table, $data);
     }
 
     /**
      * Helper de atualização de dados em uma tabela.
      */
-    public static function update(string $table, array $data, string $where, array $whereParams = [], string $connectionName = 'DEFAULT', ?string $schema = null): int {
+    public static function update(
+        string $table,
+        array $data,
+        string $where,
+        array $whereParams = [],
+        string $connectionName = 'DEFAULT',
+        ?string $schema = null
+    ): int {
         return self::getConnection(connectionName: $connectionName, schema: $schema)->update($table, $data, $where, $whereParams);
     }
 
     /**
      * Helper de exclusão de registros em uma tabela.
      */
-    public static function delete(string $table, string $where, array $params = [], string $connectionName = 'DEFAULT', ?string $schema = null): int {
+    public static function delete(
+        string $table,
+        string $where,
+        array $params = [],
+        string $connectionName = 'DEFAULT',
+        ?string $schema = null
+    ): int {
         return self::getConnection(connectionName: $connectionName, schema: $schema)->delete($table, $where, $params);
     }
 
@@ -240,8 +281,12 @@ class DBManager {
     /**
      * Retorna o último ID inserido ou valor de sequence (PostgreSQL).
      */
-    public static function lastInsertId(?string $name = null, string $connectionName = 'DEFAULT', ?string $schema = null): string|false {
-        return self::getConnection(connectionName: $connectionName, schema: $schema)->lastInsertId($name);
+    public static function lastInsertId(
+        string $connectionName = 'DEFAULT',
+        ?string $schema = null,
+        ?string $sequence = null
+    ): string|false {
+        return self::getConnection(connectionName: $connectionName, schema: $schema)->lastInsertId($sequence);
     }
 
     /**
