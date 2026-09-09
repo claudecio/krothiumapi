@@ -2,22 +2,28 @@
 namespace KrothiumAPI\Utils;
 
 class HttpUtil {
+    private static ?string $rawBodyCache = null;
+    private static ?array $parsedJsonCache = null;
+
+    /**
+     * Limpa o cache estático do corpo da requisição (útil em testes unitários).
+     */
+    public static function clearInputCache(): void {
+        self::$rawBodyCache = null;
+        self::$parsedJsonCache = null;
+    }
+
     /**
      * Captura e filtra dados de entrada HTTP (GET, POST, COOKIE, SERVER) de forma segura.
      *
-     * Este método centraliza a obtenção de dados de requisição, aplicando opcionalmente filtros.
-     * Ele lida com submissões **POST** padrão (urlencoded) e submissões **JSON** (tipo "application/json"),
-     * retornando os dados como um array associativo ou como a string JSON bruta, se especificado.
-     * Em caso de JSON inválido, a função encerra a execução e retorna um erro HTTP 500.
-     *
-     * @param string $form_type O tipo de entrada a ser filtrada (constantes PHP: INPUT_GET, INPUT_POST, INPUT_COOKIE, INPUT_SERVER). O padrão é INPUT_GET.
-     * @param array|null $filters Uma matriz de filtros a serem aplicados aos dados de entrada, compatível com a função `filter_input_array()`.
-     * @return array|string Retorna um array associativo dos dados de entrada filtrados (ou array vazio se não houver dados), ou a string JSON bruta se $asJson for true e o POST for JSON.
-     * @return mixed Encerra a execução e envia uma resposta HTTP 500 se ocorrer um erro de decodificação JSON.
+     * @param string $form_type O tipo de entrada a ser filtrada (constantes PHP: INPUT_GET, INPUT_POST, INPUT_COOKIE, INPUT_SERVER). Padrão: INPUT_GET.
+     * @param array|null $filters Uma matriz de filtros a serem aplicados aos dados de entrada.
+     * @param string $return_type 'array' ou 'string' (para corpo bruto).
+     * @return mixed Retorna os dados de entrada filtrados.
      */
     public static function getRequestBody(string $form_type = 'GET', ?array $filters = null, string $return_type = 'array'): mixed {
         $method = strtoupper(string: trim(string: $form_type));
-        $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+        $contentType = $_SERVER['CONTENT_TYPE'] ?? $_SERVER['HTTP_CONTENT_TYPE'] ?? '';
         $isJson = self::isJsonContentType(contentType: $contentType);
 
         $inputMap = [
@@ -29,16 +35,12 @@ class HttpUtil {
 
         // GET/POST/COOKIE/SERVER
         if (isset($inputMap[$method])) {
-            // POST JSON: lê o body
             if ($method === 'POST' && $isJson) {
-                $raw = file_get_contents(filename: 'php://input') ?: '';
+                $raw = self::getRawBody();
                 if ($return_type === 'string') {
                     return $raw;
                 }
-                $data = json_decode(json: $raw, associative: true);
-                if (json_last_error() !== JSON_ERROR_NONE) {
-                    self::errorJson(statusCode: 400, message: 'Invalid JSON: ' . json_last_error_msg());
-                }
+                $data = self::getParsedJson();
                 unset($data['_method']);
                 return self::applyFilters(data: $data ?? [], filters: $filters);
             }
@@ -48,7 +50,7 @@ class HttpUtil {
 
         // PUT/PATCH/DELETE
         if (in_array(needle: $method, haystack: ['PUT', 'PATCH', 'DELETE'], strict: true)) {
-            $raw = file_get_contents(filename: 'php://input') ?: '';
+            $raw = self::getRawBody();
             if ($raw === '') {
                 return [];
             }
@@ -56,10 +58,7 @@ class HttpUtil {
                 if ($return_type === 'string') {
                     return $raw;
                 }
-                $data = json_decode(json: $raw, associative: true);
-                if (json_last_error() !== JSON_ERROR_NONE) {
-                    self::errorJson(statusCode: 400, message: 'Invalid JSON: ' . json_last_error_msg());
-                }
+                $data = self::getParsedJson();
             } else {
                 parse_str($raw, $data);
             }
@@ -73,27 +72,180 @@ class HttpUtil {
     }
 
     /**
-     * Despacha uma resposta JSON customizada e encerra a execução do script.
-     * Ele permite a mesclagem (merge) de um array de saída personalizado 
-     * diretamente na raiz do objeto JSON, além de suportar mensagens de feedback opcionais.
-     *
-     * @param int $response_code Código de status HTTP (ex: 200, 201, 403).
-     * @param string|null $message Mensagem de texto opcional para o cliente.
-     * @param array|null $output Array associativo de dados extras a serem mesclados na resposta.
-     * @return void Este método interrompe o fluxo do programa imediatamente.
+     * Retorna o payload JSON da requisição decodificado como array associativo.
+     * Suporta busca por chave com notação de ponto (ex: `HttpUtil::json('user.email')`).
+     */
+    public static function json(?string $key = null, mixed $default = null): mixed {
+        $data = self::getParsedJson();
+        if ($key === null) {
+            return $data;
+        }
+
+        $segments = explode('.', $key);
+        $current = $data;
+
+        foreach ($segments as $segment) {
+            if (!is_array($current) || !array_key_exists($segment, $current)) {
+                return $default;
+            }
+            $current = $current[$segment];
+        }
+
+        return $current;
+    }
+
+    /**
+     * Retorna dados dos parâmetros de query (GET).
+     */
+    public static function query(?string $key = null, mixed $default = null): mixed {
+        if ($key === null) {
+            return $_GET ?? [];
+        }
+        return $_GET[$key] ?? $default;
+    }
+
+    /**
+     * Retorna dados dos parâmetros POST.
+     */
+    public static function post(?string $key = null, mixed $default = null): mixed {
+        if ($key === null) {
+            return $_POST ?? [];
+        }
+        return $_POST[$key] ?? $default;
+    }
+
+    /**
+     * Recupera um parâmetro de entrada de forma unificada (JSON body -> POST -> GET).
+     */
+    public static function input(?string $key = null, mixed $default = null): mixed {
+        $contentType = $_SERVER['CONTENT_TYPE'] ?? $_SERVER['HTTP_CONTENT_TYPE'] ?? '';
+        $isJson = self::isJsonContentType(contentType: $contentType);
+
+        if ($isJson) {
+            $jsonData = self::getParsedJson();
+            if ($key === null) {
+                return $jsonData;
+            }
+            if (array_key_exists($key, $jsonData)) {
+                return $jsonData[$key];
+            }
+        }
+
+        if (isset($_POST[$key])) {
+            return $_POST[$key];
+        }
+
+        if (isset($_GET[$key])) {
+            return $_GET[$key];
+        }
+
+        if ($key === null) {
+            return array_merge($_GET ?? [], $_POST ?? [], $isJson ? self::getParsedJson() : []);
+        }
+
+        return $default;
+    }
+
+    /**
+     * Lê um cabeçalho HTTP de forma case-insensitive.
+     */
+    public static function header(string $name, ?string $default = null): ?string {
+        $nameUpper = strtoupper(str_replace('-', '_', $name));
+
+        if (isset($_SERVER["HTTP_{$nameUpper}"])) {
+            return (string)$_SERVER["HTTP_{$nameUpper}"];
+        }
+
+        if (isset($_SERVER[$nameUpper])) {
+            return (string)$_SERVER[$nameUpper];
+        }
+
+        if (function_exists('getallheaders')) {
+            $headers = getallheaders();
+            if (is_array($headers)) {
+                $normalized = array_change_key_case($headers, CASE_LOWER);
+                $key = strtolower($name);
+                if (isset($normalized[$key])) {
+                    return (string)$normalized[$key];
+                }
+            }
+        }
+
+        return $default;
+    }
+
+    /**
+     * Obtém o IP real do cliente, considerando Cloudflare e proxies reversos.
+     */
+    public static function ip(): string {
+        $headers = [
+            'HTTP_CF_CONNECTING_IP',     // Cloudflare
+            'HTTP_TRUE_CLIENT_IP',       // Cloudflare Enterprise / Akamai
+            'HTTP_X_FORWARDED_FOR',      // Proxy chain
+            'HTTP_X_REAL_IP',            // Nginx reverse proxy
+            'HTTP_CLIENT_IP',
+            'REMOTE_ADDR'                // Endereço direto
+        ];
+
+        foreach ($headers as $header) {
+            if (!empty($_SERVER[$header])) {
+                $ipList = explode(',', $_SERVER[$header]);
+                $ip = trim($ipList[0]);
+                if (filter_var($ip, FILTER_VALIDATE_IP)) {
+                    return $ip;
+                }
+            }
+        }
+
+        return '127.0.0.1';
+    }
+
+    /**
+     * Retorna o corpo bruto da requisição em cache.
+     */
+    public static function getRawBody(): string {
+        if (self::$rawBodyCache === null) {
+            self::$rawBodyCache = file_get_contents(filename: 'php://input') ?: '';
+        }
+        return self::$rawBodyCache;
+    }
+
+    /**
+     * Retorna o corpo JSON decodificado em cache.
+     */
+    public static function getParsedJson(): array {
+        if (self::$parsedJsonCache === null) {
+            $raw = self::getRawBody();
+            if ($raw === '') {
+                self::$parsedJsonCache = [];
+            } else {
+                $data = json_decode(json: $raw, associative: true);
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    self::errorJson(statusCode: 400, message: 'Invalid JSON: ' . json_last_error_msg());
+                }
+                self::$parsedJsonCache = is_array($data) ? $data : [];
+            }
+        }
+        return self::$parsedJsonCache;
+    }
+
+    /**
+     * Despacha uma resposta JSON customizada e encerra a execução.
      */
     public static function jsonResponse(int $response_code, ?string $message = null, ?array $output = null): void {
-        // Constrói o array de resposta com os campos "message" e "data" se eles forem fornecidos
         $response = [];
-        if ($message) {
+        if ($message !== null) {
             $response['message'] = $message;
         }
-        if ($output) {
+        if ($output !== null) {
             $response = array_merge($response, $output);
         }
-        // Define o código de resposta HTTP e o cabeçalho de conteúdo, e envia a resposta JSON
-        http_response_code(response_code: $response_code);
-        header(header: 'Content-Type: application/json; charset=utf-8');
+
+        if (!headers_sent()) {
+            http_response_code(response_code: $response_code);
+            header(header: 'Content-Type: application/json; charset=utf-8');
+        }
+
         if (!empty($response)) {
             echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
         }
@@ -101,34 +253,55 @@ class HttpUtil {
     }
 
     /**
-     * Realiza o redirecionamento do navegador para uma nova URL e encerra a execução do script.
-     *
-     * @param string $url O endereço de destino (URL absoluta ou caminho relativo) para onde o usuário será redirecionado.
-     * @return void Não retorna valor, pois encerra a execução do processo PHP.
+     * Despacha uma resposta padronizada de sucesso em JSON.
+     */
+    public static function success(mixed $data = null, string $message = 'Success', int $statusCode = 200): void {
+        $payload = [
+            'status'  => 'success',
+            'message' => $message,
+        ];
+        if ($data !== null) {
+            $payload['data'] = $data;
+        }
+
+        self::jsonResponse(response_code: $statusCode, output: $payload);
+    }
+
+    /**
+     * Despacha uma resposta padronizada de erro em JSON.
+     */
+    public static function error(string $message, int $statusCode = 400, ?array $extra = null): void {
+        $payload = [
+            'status'  => 'error',
+            'message' => $message,
+            'code'    => $statusCode,
+        ];
+        if ($extra !== null) {
+            $payload['extra'] = $extra;
+        }
+
+        self::jsonResponse(response_code: $statusCode, output: $payload);
+    }
+
+    /**
+     * Realiza redirecionamento HTTP seguro e encerra a execução.
      */
     public static function redirect(string $url): void {
-        // Remove barra final do subpath para evitar //
         $subpath = rtrim(string: self::getSubpath(), characters: '/');
-        // Garante que a URL comece com /
-        $url = str_starts_with(haystack: $url, needle: '/')
-            ? $url
-            : "/{$url}";
-        // Persiste sessão antes do redirect
-        session_write_close();
-        // Monta URL final
+        $url = str_starts_with(haystack: $url, needle: '/') ? $url : "/{$url}";
+
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
+
         $location = "{$subpath}{$url}" . self::getQueryString();
         header(header: "Location: {$location}");
         exit;
     }
 
-    /**
-     * Extrai a string de query da URI da requisição.
-     *
-     * @return string|null A string de query completa, ou `null` se a URI não contiver uma string de query.
-     */
     public static function getQueryString(): ?string {
-        $parts = explode(separator: '?', string: $_SERVER['REQUEST_URI'], limit: 2); // limite 2 garante que só divide em duas partes
-        $request = $parts[1] ?? null; // se não existir, define null
+        $parts = explode(separator: '?', string: $_SERVER['REQUEST_URI'] ?? '', limit: 2);
+        $request = $parts[1] ?? null;
         return ($request !== null && $request !== '') ? "?{$request}" : '';
     }
 
@@ -136,41 +309,23 @@ class HttpUtil {
         return $_SESSION['ROUTER_BASE_PATH'] ?? '';
     }
 
-    /**
-     * Verifica se o cabeçalho de tipo de conteúdo (Content-Type) da requisição indica um formato JSON.
-     *
-     * @param string $contentType O valor bruto extraído do cabeçalho `$_SERVER['CONTENT_TYPE']`.
-     * @return bool Retorna `true` se o formato JSON for detectado, caso contrário, `false`.
-     */
     private static function isJsonContentType(string $contentType): bool {
-        // pega application/json, application/json; charset=utf-8, application/vnd.api+json, etc.
         return stripos(haystack: $contentType, needle: 'json') !== false;
     }
 
-    /**
-     * Interrompe a execução do script e envia uma resposta de erro padronizada em formato JSON.
-     *
-     * @param int $statusCode Código de status HTTP (ex: 400, 403, 404, 500).
-     * @param string $message Mensagem descritiva detalhando o motivo do erro.
-     * @return never Este método encerra a execução do script e nunca retorna ao chamador.
-     */
     private static function errorJson(int $statusCode, string $message): never {
-        http_response_code(response_code: $statusCode);
-        header(header: "Content-Type: application/json; charset=utf-8");
+        if (!headers_sent()) {
+            http_response_code(response_code: $statusCode);
+            header(header: "Content-Type: application/json; charset=utf-8");
+        }
         echo json_encode(value: [
             "status"  => "error",
             "message" => $message,
-        ]);
+            "code"    => $statusCode
+        ], flags: JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
         exit;
     }
 
-    /**
-     * Aplica filtros de higienização e validação em um conjunto de dados brutos de forma segura.
-     *
-     * @param array $data O array associativo de dados brutos a serem processados.
-     * @param array|null $filters O mapa de definições de filtros (ex: `['id' => FILTER_VALIDATE_INT]`).
-     * @return array O conjunto de dados resultantes após a validação e higienização.
-     */
     private static function applyFilters(array $data, ?array $filters): array {
         if ($filters === null) {
             return $data;
@@ -180,21 +335,11 @@ class HttpUtil {
     }
 
     /**
-     * Extrai o token de autenticação do tipo 'Bearer' do cabeçalho da requisição HTTP.
-     *
-     * @return string|null O token de autenticação do tipo 'Bearer' como uma string, ou `null` 
-     * se o cabeçalho não for encontrado ou não estiver no formato esperado.
+     * Extrai o token Bearer do cabeçalho de autenticação.
      */
     public static function getBearerToken(): ?string {
-        // Tenta pegar o header de todas as fontes possíveis
-        $headers = $_SERVER['Authorization'] ?? $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? (function_exists(function: 'apache_request_headers') ? apache_request_headers() : []);
-        // Se veio do apache_request_headers, normaliza chaves
-        if (is_array(value: $headers)) {
-            $headers = array_change_key_case(array: $headers, case: CASE_LOWER);
-            $headers = $headers['authorization'] ?? '';
-        }
-        $headers = trim(string: $headers);
-        if ($headers && preg_match(pattern: '/Bearer\s(\S+)/', subject: $headers, matches: $matches)) {
+        $header = self::header('Authorization') ?? self::header('AUTHORIZATION') ?? '';
+        if ($header && preg_match(pattern: '/Bearer\s(\S+)/i', subject: $header, matches: $matches)) {
             return $matches[1];
         }
         return null;
