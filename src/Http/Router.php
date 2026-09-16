@@ -100,7 +100,6 @@ class Router {
             value: [
                 'status'  => 'error',
                 'message' => $msg,
-                'code'    => $code,
             ],
             flags: JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT
         );
@@ -151,11 +150,11 @@ class Router {
         $baseUri = '/' . trim(string: $uri, characters: '/');
 
         self::get($baseUri, [$controller, 'index'], $middlewares);
-        self::get($baseUri . '/{id}', [$controller, 'read'], $middlewares);
+        self::get($baseUri . '/{uuid}', [$controller, 'read'], $middlewares);
         self::post($baseUri, [$controller, 'create'], $middlewares);
-        self::put($baseUri . '/{id}', [$controller, 'update'], $middlewares);
-        self::patch($baseUri . '/{id}', [$controller, 'update'], $middlewares);
-        self::delete($baseUri . '/{id}', [$controller, 'delete'], $middlewares);
+        self::put($baseUri . '/{uuid}', [$controller, 'update'], $middlewares);
+        self::patch($baseUri . '/{uuid}', [$controller, 'update'], $middlewares);
+        self::delete($baseUri . '/{uuid}', [$controller, 'delete'], $middlewares);
     }
 
     public static function defineMiddleware(string $name, array|string $middleware): void {
