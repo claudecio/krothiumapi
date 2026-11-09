@@ -274,7 +274,6 @@ class HttpUtil {
         $payload = [
             'status'  => 'error',
             'message' => $message,
-            'code'    => $statusCode,
         ];
         if ($extra !== null) {
             $payload['extra'] = $extra;
